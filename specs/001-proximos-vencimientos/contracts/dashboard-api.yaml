@@ -1,0 +1,198 @@
+openapi: 3.1.0
+
+info:
+  title: CIC Service - Dashboard API
+  description: |
+    API del panel de dirección del sistema CIC (Convenios Inter-institucionales y Cooperación).
+    Expone endpoints para que la directora de alianzas visualice información estratégica
+    sobre el estado de los convenios.
+  version: 1.0.0
+  contact:
+    name: Equipo CIC
+    email: maurigjaque08@gmail.com
+
+servers:
+  - url: http://localhost:8080
+    description: Servidor de desarrollo local
+
+tags:
+  - name: dashboard
+    description: Endpoints del panel de dirección
+
+paths:
+  /api/v1/dashboard/proximos-vencimientos:
+    get:
+      tags:
+        - dashboard
+      operationId: getProximosVencimientos
+      summary: Obtener convenios próximos a vencer
+      description: |
+        Retorna todos los convenios cuya fecha de vencimiento se encuentra dentro
+        de los próximos 30 días calendario (inclusive hoy e inclusive hoy+30).
+        Los resultados se ordenan por fecha de vencimiento de forma ascendente
+        (los más urgentes primero).
+
+        Cuando no existen convenios en el rango, la respuesta incluye el mensaje
+        "Sin vencimientos próximos en los próximos 30 días".
+      responses:
+        '200':
+          description: Lista de convenios próximos a vencer obtenida exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProximosVencimientosResponse'
+              examples:
+                con_vencimientos:
+                  summary: Panel con convenios próximos a vencer
+                  value:
+                    convenios:
+                      - id: 1
+                        nombre: "Convenio de Cooperación Académica UPS-ESPE"
+                        entidadSocio: "ESPE"
+                        fechaVencimiento: "2026-07-10"
+                        diasRestantes: 8
+                      - id: 5
+                        nombre: "Acuerdo de Pasantías UPS-Banco Pichincha"
+                        entidadSocio: "Banco Pichincha"
+                        fechaVencimiento: "2026-07-25"
+                        diasRestantes: 23
+                    totalConvenios: 2
+                    hayVencimientos: true
+                    mensaje: null
+                sin_vencimientos:
+                  summary: Panel sin convenios próximos a vencer
+                  value:
+                    convenios: []
+                    totalConvenios: 0
+                    hayVencimientos: false
+                    mensaje: "Sin vencimientos próximos en los próximos 30 días"
+        '401':
+          description: No autenticado — se requiere sesión válida de directora
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Acceso denegado — el usuario no tiene rol de directora de alianzas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    ProximoVencimientoDTO:
+      type: object
+      description: Resumen de un convenio próximo a vencer para el panel de dirección
+      required:
+        - id
+        - nombre
+        - entidadSocio
+        - fechaVencimiento
+        - diasRestantes
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Identificador único del convenio
+          example: 1
+        nombre:
+          type: string
+          description: Nombre descriptivo del convenio
+          example: "Convenio de Cooperación Académica UPS-ESPE"
+          maxLength: 255
+        entidadSocio:
+          type: string
+          description: Nombre de la organización contraparte
+          example: "ESPE"
+          maxLength: 255
+        fechaVencimiento:
+          type: string
+          format: date
+          description: Fecha de vencimiento del convenio en formato ISO-8601 (YYYY-MM-DD)
+          example: "2026-07-10"
+        diasRestantes:
+          type: integer
+          format: int32
+          description: Días calendarios restantes hasta el vencimiento (0 = vence hoy)
+          minimum: 0
+          maximum: 30
+          example: 8
+
+    ProximosVencimientosResponse:
+      type: object
+      description: Respuesta del panel de próximos vencimientos
+      required:
+        - convenios
+        - totalConvenios
+        - hayVencimientos
+      properties:
+        convenios:
+          type: array
+          description: Lista de convenios próximos a vencer, ordenados por fecha de vencimiento ascendente
+          items:
+            $ref: '#/components/schemas/ProximoVencimientoDTO'
+        totalConvenios:
+          type: integer
+          format: int32
+          description: Cantidad total de convenios en la lista
+          minimum: 0
+          example: 2
+        hayVencimientos:
+          type: boolean
+          description: Indica si existen convenios próximos a vencer
+          example: true
+        mensaje:
+          type: string
+          nullable: true
+          description: |
+            Mensaje descriptivo del estado. Contiene "Sin vencimientos próximos en los próximos 30 días"
+            cuando la lista está vacía. Es null cuando hay convenios.
+          example: null
+
+    ErrorResponse:
+      type: object
+      description: Respuesta de error estándar
+      required:
+        - timestamp
+        - status
+        - error
+        - message
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: Momento en que ocurrió el error
+          example: "2026-07-02T10:30:00Z"
+        status:
+          type: integer
+          description: Código de estado HTTP
+          example: 500
+        error:
+          type: string
+          description: Nombre del error HTTP
+          example: "Internal Server Error"
+        message:
+          type: string
+          description: Mensaje descriptivo del error
+          example: "Error al consultar los convenios"
+        path:
+          type: string
+          description: Path de la solicitud que causó el error
+          example: "/api/v1/dashboard/proximos-vencimientos"
+
+  securitySchemes:
+    sessionAuth:
+      type: apiKey
+      in: cookie
+      name: JSESSIONID
+      description: Autenticación por sesión Spring Security
+
+security:
+  - sessionAuth: []

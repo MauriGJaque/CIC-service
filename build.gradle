@@ -1,0 +1,114 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '4.1.0'
+    id 'io.spring.dependency-management' version '1.1.7'
+    id 'org.openapi.generator' version '7.12.0'
+    id 'jacoco'
+}
+
+group = 'org.ups'
+version = '0.0.1-SNAPSHOT'
+description = 'CIC-service'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+openApiGenerate {
+    generatorName = "spring"
+    inputSpec = project.file("src/main/resources/openapi/dashboard-api.yaml").toURI().toString()
+    outputDir = "$buildDir/generated/openapi"
+    apiPackage = "org.ups.cic.adapters.in.web.generated"
+    modelPackage = "org.ups.cic.adapters.in.web.generated.model"
+    configOptions = [
+        interfaceOnly       : "true",
+        useSpringBoot3      : "true",
+        openApiNullable     : "false",
+        dateLibrary         : "java8"
+    ]
+    generateApiTests          = false
+    generateModelTests        = false
+    generateApiDocumentation  = false
+    generateModelDocumentation = false
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs += ["$buildDir/generated/openapi/src/main/java"]
+        }
+    }
+}
+
+compileJava.dependsOn tasks.openApiGenerate
+
+jacoco {
+    toolVersion = "0.8.12"
+}
+
+def jacocoExcludes = [
+    'org/ups/cic/CicServiceApplication.class',
+    'org/ups/cic/adapters/in/web/generated/**',
+    'org/ups/cic/adapters/out/persistence/ConvenioJpaEntity.class',
+    'org/ups/cic/infrastructure/config/**'
+]
+
+jacocoTestReport {
+    dependsOn test
+    classDirectories.setFrom(files(classDirectories.files.collect {
+        fileTree(dir: it, exclude: jacocoExcludes)
+    }))
+    reports {
+        html.required = true
+        xml.required = true
+    }
+}
+
+jacocoTestCoverageVerification {
+    classDirectories.setFrom(files(classDirectories.files.collect {
+        fileTree(dir: it, exclude: jacocoExcludes)
+    }))
+    violationRules {
+        rule {
+            limit {
+                counter = 'LINE'
+                minimum = 0.80
+            }
+            limit {
+                counter = 'BRANCH'
+                minimum = 0.80
+            }
+        }
+    }
+}
+
+check.dependsOn jacocoTestCoverageVerification
+test.finalizedBy jacocoTestReport
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-h2console'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'io.swagger.core.v3:swagger-annotations-jakarta:2.2.26'
+    compileOnly 'org.projectlombok:lombok'
+    runtimeOnly 'com.h2database:h2'
+    annotationProcessor 'org.projectlombok:lombok'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testCompileOnly 'org.projectlombok:lombok'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    finalizedBy jacocoTestReport
+}

@@ -1,0 +1,100 @@
+{
+  "proyecto": "CIC-service",
+  "version": "0.0.1-SNAPSHOT",
+  "fecha": "2026-07-03",
+  "commit": "N/A",
+  "tests": {
+    "comando": "./gradlew test jacocoTestReport",
+    "passed": 10,
+    "total": 10,
+    "coverage": 100.0,
+    "coverage_fuente": "build/reports/jacoco/test/jacocoTestReport.xml (report-level LINE counter: missed=0, covered=52; BRANCH counter: missed=0, covered=4). Nota: build.gradle excluye de jacocoExcludes (líneas 55-60): CicServiceApplication.class, adapters/in/web/generated/** (código generado por openapi-generator), ConvenioJpaEntity.class (entidad JPA/Lombok) e infrastructure/config/** (BeanConfiguration). Exclusiones declaradas explícitamente en build.gradle pero SIN comentario de justificación en el archivo, lo cual incumple parcialmente el principio V de constitution.md ('Coverage exclusions... MUST be explicitly declared in the JaCoCo configuration and justified in a comment')."
+  },
+  "security": {
+    "fuente": "Semgrep CLI (uvx semgrep --config auto sobre src/main/java, 11 archivos, 343 reglas Java+multilang; y --config p/secrets sobre src, 15 archivos, 59 reglas) + revisión manual de configuración. No se pudo invocar el subagente security-reviewer vía Semgrep MCP en este entorno (falta tool Task/MCP en la sesión); se ejecutó semgrep directamente como CLI equivalente, mismos resultados esperables.",
+    "critical": 0,
+    "high": 2,
+    "secrets": 0,
+    "hallazgos": [
+      {
+        "severidad": "high",
+        "descripcion": "El endpoint GET /api/v1/dashboard/proximos-vencimientos (DashboardController.java) no tiene ningún mecanismo de autenticación/autorización implementado en el código: no hay dependencia spring-boot-starter-security, ni SecurityFilterChain, ni @PreAuthorize/@Secured en todo el proyecto (grep sin resultados). El spec.md declara la autenticación 'fuera del alcance' de esta historia (sección Assumptions) y el edge case de sesión inválida/expirada→401 no tiene ninguna prueba ni implementación asociada. Riesgo: si se despliega tal cual, el endpoint es público.",
+        "archivo": "src/main/java/org/ups/cic/adapters/in/web/DashboardController.java:16-32"
+      },
+      {
+        "severidad": "high",
+        "descripcion": "La consola H2 está habilitada (spring.h2.console.enabled=true) en application.yaml de main (no solo en el perfil de test), expuesta en /h2-console. Sin evidencia de que se deshabilite en producción (no hay perfil 'prod' en el repo).",
+        "archivo": "src/main/resources/application.yaml:16-18"
+      }
+    ]
+  },
+  "spec": "specs/001-proximos-vencimientos/spec.md",
+  "criteria": [
+    {
+      "id": "FR-001",
+      "fuente": "spec.md · FR-001 (sección 'Próximos vencimientos' en el panel)",
+      "status": "cumple",
+      "evidencia": "DashboardControllerFunctionalTest.dadoConveniosProximos_cuandoGetProximosVencimientos_entoncesListaOrdenada y dadoSinConveniosProximos_cuandoGetProximosVencimientos_entoncesListaVacia (src/test/java/org/ups/cic/functional/adapters/in/web/DashboardControllerFunctionalTest.java:27,47) PASAN y verifican la estructura completa de la sección (convenios, totalConvenios, hayVencimientos, mensaje) expuesta por GET /api/v1/dashboard/proximos-vencimientos (DashboardController.java:28)."
+    },
+    {
+      "id": "FR-002",
+      "fuente": "spec.md · FR-002 (rango ≤30 días, ambos extremos inclusive)",
+      "status": "cumple",
+      "evidencia": "ObtenerProximosVencimientosUseCaseTest.dadoConvenioEnLimite30Dias_cuandoEjecutar_entoncesAparece (línea 58) y ConvenioRepositoryAdapterTest.dadoConvenioEnLimite30_cuandoBuscar_entoncesAparece (línea 60) PASAN, confirmando el límite superior hoy+30 incluido. data-us1.sql incluye convenio a 30 días y el test funcional confirma totalConvenios=3 incluyéndolo."
+    },
+    {
+      "id": "FR-003",
+      "fuente": "spec.md · FR-003 (orden ascendente por fecha de vencimiento)",
+      "status": "cumple",
+      "evidencia": "ObtenerProximosVencimientosUseCaseTest.dadoConveniosEnRango_cuandoEjecutar_entoncesRetornaListaOrdenada (línea 40) PASA verificando orden ASC en el use case. ConvenioJpaRepository.findProximosVencimientos usa 'ORDER BY c.fechaVencimiento ASC' (ConvenioJpaRepository.java:14), y ConvenioRepositoryAdapterTest.dadoConveniosVariados_cuandoBuscarEnRango_entoncesRetornaSoloRango (línea 33) verifica isBefore entre resultado[0] y resultado[1]. NOTA: el test funcional (end-to-end HTTP) solo verifica campos de convenios[0], no el orden completo de los 3 elementos devueltos por el endpoint; el orden queda demostrado en unit+integration pero no a nivel funcional completo."
+    },
+    {
+      "id": "FR-004",
+      "fuente": "spec.md · FR-004 (mensaje de estado vacío)",
+      "status": "cumple",
+      "evidencia": "DashboardControllerFunctionalTest.dadoSinConveniosProximos_cuandoGetProximosVencimientos_entoncesListaVacia (línea 47) PASA y verifica jsonPath('$.mensaje').value('Sin vencimientos próximos en los próximos 30 días') con hayVencimientos=false, totalConvenios=0, usando data-us2.sql (solo convenios fuera de rango o vencidos)."
+    },
+    {
+      "id": "FR-005",
+      "fuente": "spec.md · FR-005 (excluir convenios vencidos)",
+      "status": "cumple",
+      "evidencia": "ConvenioRepositoryAdapterTest.dadoConveniosVariados_cuandoBuscarEnRango_entoncesRetornaSoloRango (línea 33) inserta 'Convenio Vencido' con fechaVencimiento=hoy-3 y 'Convenio Lejano' hoy+60, y assertThat(resultado).hasSize(2) confirma que solo los 2 convenios en rango (hoy+5, hoy+15) se devuelven, excluyendo el vencido. data-us1.sql (funcional) también incluye 'Convenio Vencido' (hoy-3) y el test funcional confirma totalConvenios=3, excluyéndolo implícitamente."
+    },
+    {
+      "id": "FR-006",
+      "fuente": "spec.md · FR-006 (actualizar datos vigentes en cada carga/recarga del panel)",
+      "status": "incumple",
+      "evidencia": "No existe ninguna prueba (unit/integration/funcional) que invoque el endpoint dos veces con datos modificados entre llamadas para demostrar que la sección se actualiza en cada carga. Se buscó con Grep en src/test sin encontrar ningún test de este tipo. El diseño (sin @Cacheable, consulta directa a BD en cada request vía ObtenerProximosVencimientosUseCase.ejecutar()) sugiere que el comportamiento sería correcto, pero no hay evidencia de prueba que lo demuestre, por lo que no se puede declarar 'cumple' sin evidencia."
+    },
+    {
+      "id": "FR-007",
+      "fuente": "spec.md · FR-007 (mostrar al menos nombre/identificador y fecha de vencimiento por convenio)",
+      "status": "cumple",
+      "evidencia": "DashboardControllerFunctionalTest.dadoConveniosProximos_cuandoGetProximosVencimientos_entoncesListaOrdenada (líneas 36-40) verifica jsonPath para convenios[0].id, nombre, entidadSocio, fechaVencimiento y diasRestantes, todos presentes en la respuesta vía ConvenioMapper.toDto (ConvenioMapper.java:15-23)."
+    },
+    {
+      "id": "EDGE-limite-30-dias",
+      "fuente": "spec.md · Edge Case (convenio vence exactamente en 30 días)",
+      "status": "cumple",
+      "evidencia": "Cubierto por FR-002: ObtenerProximosVencimientosUseCaseTest línea 58 y ConvenioRepositoryAdapterTest línea 60."
+    },
+    {
+      "id": "EDGE-convenio-vencido",
+      "fuente": "spec.md · Edge Case (convenio ya vencido no aparece)",
+      "status": "cumple",
+      "evidencia": "Cubierto por FR-005: ConvenioRepositoryAdapterTest línea 33 (hasSize(2), excluye 'Convenio Vencido')."
+    },
+    {
+      "id": "EDGE-gran-volumen",
+      "fuente": "spec.md · Edge Case (100+ convenios sin paginación)",
+      "status": "desconocido",
+      "evidencia": "No existe ninguna prueba con un volumen grande (100+) de convenios. El código no implementa paginación (ausencia de código, consistente con el spec), pero no hay evidencia de prueba de volumen ni de que el ordenamiento se mantenga estable a esa escala. No se puede afirmar 'cumple' sin una prueba que lo demuestre."
+    },
+    {
+      "id": "EDGE-sesion-invalida-401",
+      "fuente": "spec.md · Edge Case (sesión inválida/expirada retorna 401)",
+      "status": "incumple",
+      "evidencia": "No hay implementación de autenticación en el proyecto (sin spring-boot-starter-security, sin SecurityFilterChain, sin filtros ni anotaciones de seguridad — grep sin resultados en src/main y src/test) ni prueba que verifique un 401 ante sesión inválida. El spec.md (sección Assumptions) declara la autenticación 'fuera del alcance de esta historia', por lo que este edge case depende de un componente externo no presente en este repositorio. Se marca incumple porque el edge case está definido en el spec.md de esta feature y ni el código ni las pruebas lo demuestran; ver también hallazgo de seguridad 'high' sobre endpoint sin autenticación."
+    }
+  ]
+}
