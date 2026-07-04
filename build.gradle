@@ -48,6 +48,17 @@ sourceSets {
 
 compileJava.dependsOn tasks.openApiGenerate
 
+tasks.register('lintOpenApi', Exec) {
+    group = 'verification'
+    description = 'Lints the OpenAPI contract with Spectral against the OWASP ruleset'
+    def npxExecutable = org.gradle.internal.os.OperatingSystem.current().isWindows() ? 'npx.cmd' : 'npx'
+    commandLine npxExecutable, '--yes', '@stoplight/spectral-cli', 'lint',
+        'src/main/resources/openapi/dashboard-api.yaml',
+        '--ruleset', 'https://unpkg.com/@stoplight/spectral-owasp-ruleset'
+}
+
+check.dependsOn tasks.lintOpenApi
+
 jacoco {
     toolVersion = "0.8.12"
 }

@@ -12,8 +12,9 @@ info:
     email: maurigjaque08@gmail.com
 
 servers:
-  - url: http://localhost:8080
+  - url: https://localhost:8080
     description: Servidor de desarrollo local
+    x-internal: true
 
 tags:
   - name: dashboard
@@ -37,6 +38,13 @@ paths:
       responses:
         '200':
           description: Lista de convenios próximos a vencer obtenida exitosamente
+          headers:
+            X-RateLimit-Limit:
+              $ref: '#/components/headers/RateLimitLimit'
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/RateLimitRemaining'
+            Access-Control-Allow-Origin:
+              $ref: '#/components/headers/Access-Control-Allow-Origin'
           content:
             application/json:
               schema:
@@ -68,12 +76,26 @@ paths:
                     mensaje: "Sin vencimientos próximos en los próximos 30 días"
         '401':
           description: No autenticado — se requiere sesión válida de directora
+          headers:
+            X-RateLimit-Limit:
+              $ref: '#/components/headers/RateLimitLimit'
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/RateLimitRemaining'
+            Access-Control-Allow-Origin:
+              $ref: '#/components/headers/Access-Control-Allow-Origin'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: Acceso denegado — el usuario no tiene rol de directora de alianzas
+          headers:
+            X-RateLimit-Limit:
+              $ref: '#/components/headers/RateLimitLimit'
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/RateLimitRemaining'
+            Access-Control-Allow-Origin:
+              $ref: '#/components/headers/Access-Control-Allow-Origin'
           content:
             application/json:
               schema:
@@ -101,6 +123,8 @@ components:
           type: integer
           format: int64
           description: Identificador único del convenio
+          minimum: 1
+          maximum: 9223372036854775807
           example: 1
         nombre:
           type: string
@@ -116,6 +140,7 @@ components:
           type: string
           format: date
           description: Fecha de vencimiento del convenio en formato ISO-8601 (YYYY-MM-DD)
+          maxLength: 10
           example: "2026-07-10"
         diasRestantes:
           type: integer
@@ -136,6 +161,7 @@ components:
         convenios:
           type: array
           description: Lista de convenios próximos a vencer, ordenados por fecha de vencimiento ascendente
+          maxItems: 10000
           items:
             $ref: '#/components/schemas/ProximoVencimientoDTO'
         totalConvenios:
@@ -143,6 +169,7 @@ components:
           format: int32
           description: Cantidad total de convenios en la lista
           minimum: 0
+          maximum: 10000
           example: 2
         hayVencimientos:
           type: boolean
@@ -151,6 +178,7 @@ components:
         mensaje:
           type: string
           nullable: true
+          maxLength: 500
           description: |
             Mensaje descriptivo del estado. Contiene "Sin vencimientos próximos en los próximos 30 días"
             cuando la lista está vacía. Es null cuando hay convenios.
@@ -169,23 +197,54 @@ components:
           type: string
           format: date-time
           description: Momento en que ocurrió el error
+          maxLength: 40
           example: "2026-07-02T10:30:00Z"
         status:
           type: integer
+          format: int32
           description: Código de estado HTTP
+          minimum: 100
+          maximum: 599
           example: 500
         error:
           type: string
           description: Nombre del error HTTP
+          maxLength: 255
           example: "Internal Server Error"
         message:
           type: string
           description: Mensaje descriptivo del error
+          maxLength: 1000
           example: "Error al consultar los convenios"
         path:
           type: string
           description: Path de la solicitud que causó el error
+          maxLength: 2048
           example: "/api/v1/dashboard/proximos-vencimientos"
+
+  headers:
+    RateLimitLimit:
+      description: Número máximo de solicitudes permitidas en la ventana de rate limiting
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 10000
+        example: 100
+    RateLimitRemaining:
+      description: Número de solicitudes restantes en la ventana de rate limiting actual
+      schema:
+        type: integer
+        format: int32
+        minimum: 0
+        maximum: 10000
+        example: 99
+    Access-Control-Allow-Origin:
+      description: Origen permitido para solicitudes CORS
+      schema:
+        type: string
+        maxLength: 255
+        example: "https://cic-dashboard.ups.edu.ec"
 
   securitySchemes:
     sessionAuth:
